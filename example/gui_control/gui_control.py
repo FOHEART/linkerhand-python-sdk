@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QObject, QEvent
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, 
     QSlider, QLabel, QPushButton, QGroupBox, QScrollArea, QTabWidget, 
-    QFrame, QSplitter, QMessageBox, QTextEdit
+    QFrame, QSplitter, QMessageBox, QTextEdit, QMenuBar, QMenu, QMainWindow
 )
 from PyQt5.QtGui import QFont, QPainter, QColor, QBrush
 from PyQt5.QtCore import QRect
@@ -17,10 +17,13 @@ from config.constants import _HAND_CONFIGS
 current_dir = os.path.dirname(os.path.abspath(__file__))
 target_dir = os.path.abspath(os.path.join(current_dir, "../.."))
 sys.path.append(target_dir)
+sys.path.append(current_dir)  # 添加current_dir到path以导入src模块
 
 from LinkerHand.linker_hand_api import LinkerHandApi
 from LinkerHand.utils.load_write_yaml import LoadWriteYaml
 from LinkerHand.utils.color_msg import ColorMsg
+from LinkerHand.utils.setup_can_interface import initialize_can_interface
+from src.joint_value_tester import JointValueTester
 
 
 LOOP_TIME = 1000 # 循环动作间隔时间 毫秒
@@ -407,7 +410,7 @@ class HandApiManager(QObject):
         if self.matrix_timer.isActive():
             self.matrix_timer.stop()
 
-class HandControlGUI(QWidget):
+class HandControlGUI(QMainWindow):
     """灵巧手控制界面"""
     status_updated = pyqtSignal(str, str)  # 状态类型, 消息内容
 
@@ -437,12 +440,20 @@ class HandControlGUI(QWidget):
         self.publish_timer.setInterval(30)  # 10Hz发布频率
         self.publish_timer.timeout.connect(self.publish_joint_state)
         self.publish_timer.start()
+        
+        # 初始化关节值测试器
+        self.tester = JointValueTester()
+        self.tester.values_updated.connect(self.update_sliders_from_tester)
+        self.tester.test_status_changed.connect(self.on_test_status_changed)
 
     def init_ui(self):
         """初始化用户界面"""
         # 设置窗口属性
         self.setWindowTitle(f'灵巧手控制界面 - {self.hand_type} {self.hand_joint}')
         self.setMinimumSize(1200, 900)
+        
+        # 创建菜单栏
+        self.create_menu_bar()
         
         # 设置样式
         self.setStyleSheet("""
@@ -537,8 +548,10 @@ class HandControlGUI(QWidget):
             }
         """)
         
-        # 创建主垂直布局
-        main_layout = QVBoxLayout(self)
+        # 创建中央部件和主垂直布局
+        central_widget = QWidget()
+        main_layout = QVBoxLayout(central_widget)
+        self.setCentralWidget(central_widget)
         
         # 创建水平分割器（原有三个面板）
         splitter = QSplitter(Qt.Horizontal)
@@ -976,18 +989,72 @@ class HandControlGUI(QWidget):
         self.status_log.setObjectName("StatusLabel")
         self.status_log.setObjectName("StatusInfo")
 
+    def create_menu_bar(self):
+        """创建菜单栏"""
+        menubar = self.menuBar()  # QMainWindow提供的menuBar()方法
+        
+        # 创建"测试"菜单
+        test_menu = menubar.addMenu("测试(T)")
+        
+        # 启动循环测试动作
+        start_test_action = test_menu.addAction("启动循环测试")
+        start_test_action.triggered.connect(self.on_start_test)
+        
+        # 停止循环测试动作
+        stop_test_action = test_menu.addAction("停止循环测试")
+        stop_test_action.triggered.connect(self.on_stop_test)
+
+    def on_start_test(self):
+        """启动循环测试"""
+        # 如果正在运行其他操作，先停止
+        if self.cycle_timer and self.cycle_timer.isActive():
+            self.cycle_timer.stop()
+            self.cycle_timer = None
+        
+        # 启动测试
+        self.tester.start_test()
+        self.status_updated.emit("info", "已启动关节值循环测试 (每100ms递增/递减)")
+
+    def on_stop_test(self):
+        """停止循环测试"""
+        if self.tester.is_running():
+            self.tester.stop_test()
+            self.status_updated.emit("info", "已停止关节值循环测试")
+
+    def update_sliders_from_tester(self, values: List[int]):
+        """从测试器更新滑动条"""
+        # 更新所有滑动条
+        for i, slider in enumerate(self.sliders):
+            if i < len(values):
+                slider.blockSignals(True)  # 阻止信号，避免重复触发
+                slider.setValue(values[i])
+                self.on_slider_value_changed(i, values[i])
+                slider.blockSignals(False)
+
+    def on_test_status_changed(self, message: str):
+        """处理测试状态变化"""
+        self.status_updated.emit("info", message)
+
     def closeEvent(self, event):
         """窗口关闭事件处理"""
         if self.cycle_timer and self.cycle_timer.isActive():
             self.cycle_timer.stop()
         if self.publish_timer and self.publish_timer.isActive():
             self.publish_timer.stop()
+        # 停止测试
+        if self.tester.is_running():
+            self.tester.stop_test()
         self.api_manager.shutdown()
         super().closeEvent(event)
 
 def main():
     """主函数"""
     try:
+        # 初始化 CAN 接口
+        ColorMsg(msg="Initializing CAN interface...", color="yellow")
+        if not initialize_can_interface(can_interface="can0", bitrate=1000000):
+            ColorMsg(msg="Warning: CAN interface initialization failed, continuing anyway...", color="yellow")
+        
         # 创建Qt应用
         app = QApplication(sys.argv)
         

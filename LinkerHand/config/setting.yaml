@@ -55,4 +55,4 @@ LINKER_HAND:  # 手部配置信息
       - joint88
       - joint89
       - joint90
-PASSWORD: "12345678" # 由于与can通讯，需要激活通讯接口用到系统管理员密码。只有Linux系统需要，windows系统不需要。RS485不需要修改，RS485需要给/dev/ttyUSB* 777权限
+PASSWORD: "123456" # 由于与can通讯，需要激活通讯接口用到系统管理员密码。只有Linux系统需要，windows系统不需要。RS485不需要修改，RS485需要给/dev/ttyUSB* 777权限

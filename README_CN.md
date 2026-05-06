@@ -67,7 +67,34 @@ $ sudo chmod 777 /dev/ttyUSB0
 $ python3 example/gui_control/gui_control.py
 
 ```
+### L10 Joint Values Detailed Explanation (L10手型关节值详细说明)
 
+**GUI Control Data Format (GUI控制发送数据格式):** 10 integer values (0-255 range)
+
+| Index | Chinese | English | Function |
+|-------|---------|---------|----------|
+| 0 | 拇指根部 | Thumb CMC Pitch | Thumb flexion/extension (0: max flexion, 255: max extension) |
+| 1 | 拇指侧摆 | Thumb CMC Roll | Thumb adduction/abduction (0: max adduction, 255: max abduction) |
+| 2 | 食指根部 | Index MCP Pitch | Index finger flexion/extension |
+| 3 | 中指根部 | Middle MCP Pitch | Middle finger flexion/extension |
+| 4 | 无名指根部 | Ring MCP Pitch | Ring finger flexion/extension |
+| 5 | 小指根部 | Pinky MCP Pitch | Pinky finger flexion/extension |
+| 6 | 食指侧摆 | Index MCP Roll | Index finger adduction/abduction |
+| 7 | 无名指侧摆 | Ring MCP Roll | Ring finger adduction/abduction |
+| 8 | 小指侧摆 | Pinky MCP Roll | Pinky finger adduction/abduction |
+| 9 | 拇指旋转 | Thumb CMC Yaw | Thumb rotation |
+
+**Example Actions (示例动作):**
+- **Open (张开):** `[255, 255, 255, 255, 255, 255, 128, 67, 89, 255]` - All fingers extended
+- **Fist (握拳):** `[90, 0, 0, 0, 0, 0, 128, 67, 89, 197]` - All fingers flexed
+- **Thumbs Up (点赞):** `[255, 255, 0, 0, 0, 0, 128, 67, 89, 255]` - Index-pinky flexed, thumb extended
+
+**Value Range:** 0-255
+- **0:** Maximum flexion/adduction
+- **255:** Maximum extension/abduction
+- **128:** Approximate middle position
+
+For more preset actions, see [config/constants.py](example/gui_control/config/constants.py).
 
 ## 相关文档
 [Linker Hand API for Python Document](doc/API-Reference.md)
